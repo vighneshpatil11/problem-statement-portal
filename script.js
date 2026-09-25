@@ -1,186 +1,72 @@
-const STORAGE_KEY = "problem_statement_portal_v1";
-let problems = loadProblems();
-let activeProblemId = null;
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let problems=[]; let activeProblemId=null;
+const $=id=>document.getElementById(id);
+function configured(){return SUPABASE_URL.startsWith("http")&&!SUPABASE_ANON_KEY.includes("YOUR_")}
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
+function toast(m){const e=$("toast");e.textContent=m;e.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove("show"),2800)}
 
-const $ = (id) => document.getElementById(id);
-
-function loadProblems() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-  } catch {
-    return [];
-  }
+async function loadProblems(){
+ if(!configured()){ $("problemList").innerHTML=`<div class="form-note">Supabase is not configured. Add your credentials to <b>config.js</b>.</div>`;return}
+ const {data,error}=await db.from("problems").select(`statement_id,id,title,description,creator_name,creator_roll,created_at,team_members(id,name,roll_no,joined_at)`).order("created_at",{ascending:false});
+ if(error){console.error(error);toast("Could not load statements.");return}
+ problems=data||[];render();
 }
-
-function saveProblems() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(problems));
+function render(){
+ const q=$("searchInput").value.trim().toLowerCase();
+ const list=problems.filter(p=>`${p.statement_id} ${p.title} ${p.description} ${p.creator_name}`.toLowerCase().includes(q));
+ $("problemCount").textContent=problems.length;
+ $("interestCount").textContent=problems.reduce((s,p)=>s+(p.team_members?.length||0),0);
+ $("problemList").innerHTML=list.map(card).join("");
+ $("emptyState").classList.toggle("hidden",list.length!==0);
 }
-
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+function card(p){
+ const ms=p.team_members||[];
+ return `<article class="problem-card">
+ <div class="card-head"><span class="statement-id">${esc(p.statement_id)}</span><span class="interest-count">${ms.length} interested</span></div>
+ <h3>${esc(p.title)}</h3><p class="description">${esc(p.description)}</p>
+ <div class="creator">By <b>${esc(p.creator_name)}</b><span class="ideator">✦ IDEATOR</span> · Roll ${esc(p.creator_roll)}</div>
+ <div class="interest-box"><div class="interest-head"><b>Interested students</b><span>${ms.length}</span></div>
+ ${ms.length?`<div class="members">${ms.map(m=>`<span class="member">${esc(m.name)} · ${esc(m.roll_no)}</span>`).join("")}</div>`:`<div class="no-interest">No one has shown interest yet.</div>`}
+ <div class="join-row"><button class="join-btn" data-join="${p.id}">I'm interested →</button></div></div></article>`;
 }
+function openAdd(){$("addSection").classList.remove("hidden");$("problemTitle").focus();$("addSection").scrollIntoView({behavior:"smooth",block:"center"})}
+function closeAdd(){$("addSection").classList.add("hidden")}
+function openJoin(id){const p=problems.find(x=>x.id===id);if(!p)return;activeProblemId=id;$("joinTitle").textContent=`Join ${p.statement_id}`;$("joinDescription").textContent=p.title;$("joinModal").classList.remove("hidden");$("joinName").focus()}
+function closeJoin(){activeProblemId=null;$("joinModal").classList.add("hidden");$("joinForm").reset()}
 
-function escapeHTML(value) {
-  return String(value).replace(/[&<>"']/g, c => ({
-    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;"
-  }[c]));
+$("addBtn").onclick=openAdd;$("closeAdd").onclick=closeAdd;$("browseBtn").onclick=()=>$("listSection").scrollIntoView({behavior:"smooth"});$("searchInput").oninput=render;
+$("problemForm").onsubmit=async e=>{
+ e.preventDefault();const payload={title:$("problemTitle").value.trim(),description:$("problemDescription").value.trim(),creator_name:$("creatorName").value.trim(),creator_roll:$("creatorRoll").value.trim()};
+ const {data,error}=await db.from("problems").insert(payload).select("statement_id").single();
+ if(error){console.error(error);toast("Could not publish the statement.");return}
+ e.target.reset();closeAdd();toast(`${data.statement_id} published — you are the Ideator!`);await loadProblems();$("listSection").scrollIntoView({behavior:"smooth"});
+};
+$("problemList").onclick=e=>{const b=e.target.closest("[data-join]");if(b)openJoin(b.dataset.join)};
+$("closeJoin").onclick=closeJoin;$("joinModal").onclick=e=>{if(e.target===$("joinModal"))closeJoin()};
+$("joinForm").onsubmit=async e=>{
+ e.preventDefault();const {error}=await db.from("team_members").insert({problem_id:activeProblemId,name:$("joinName").value.trim(),roll_no:$("joinRoll").value.trim()});
+ if(error){toast(error.code==="23505"?"This roll number is already interested in this statement.":"Could not register your interest.");return}
+ closeJoin();toast("Your interest has been recorded.");await loadProblems();
+};
+
+$("adminBtn").onclick=()=>$("adminModal").classList.remove("hidden");$("closeAdmin").onclick=()=>$("adminModal").classList.add("hidden");
+$("adminLoginForm").onsubmit=async e=>{
+ e.preventDefault();const {error}=await db.auth.signInWithPassword({email:$("adminEmail").value.trim(),password:$("adminPassword").value});
+ if(error){toast("Invalid admin login.");return}$("adminModal").classList.add("hidden");e.target.reset();openAdminPanel();
+};
+async function openAdminPanel(){const {data:{user}}=await db.auth.getUser();if(!user)return;$("adminPanel").classList.remove("hidden");renderAdmin()}
+$("closeAdminPanel").onclick=()=>$("adminPanel").classList.add("hidden");
+async function renderAdmin(){
+ const {data,error}=await db.from("problems").select("id,statement_id,title,creator_name,creator_roll,created_at").order("created_at",{ascending:false});
+ if(error){toast("Could not load admin panel.");return}
+ $("adminList").innerHTML=(data||[]).map(p=>`<div class="admin-item"><div><b>${esc(p.statement_id)} — ${esc(p.title)}</b><small>${esc(p.creator_name)} · ${esc(p.creator_roll)}</small></div><button class="delete-btn" data-delete="${p.id}">Delete</button></div>`).join("")||`<div class="no-interest">No statements.</div>`;
 }
+$("adminList").onclick=async e=>{
+ const b=e.target.closest("[data-delete]");if(!b)return;const p=problems.find(x=>x.id===b.dataset.delete);
+ if(!confirm(`Delete ${p?`${p.statement_id} — ${p.title}`:"this statement"}?`))return;
+ const {error}=await db.from("problems").delete().eq("id",b.dataset.delete);
+ if(error){toast("Delete failed.");return}toast("Statement deleted.");await loadProblems();renderAdmin();
+};
+$("logoutBtn").onclick=async()=>{await db.auth.signOut();$("adminPanel").classList.add("hidden");toast("Signed out.")};
 
-function render() {
-  const query = $("searchInput").value.trim().toLowerCase();
-  const filtered = problems.filter(p =>
-    p.title.toLowerCase().includes(query) ||
-    p.description.toLowerCase().includes(query) ||
-    p.creator.name.toLowerCase().includes(query)
-  );
-
-  $("problemCount").textContent = problems.length;
-  $("teamCount").textContent = problems.length;
-  $("emptyState").classList.toggle("hidden", filtered.length !== 0);
-  $("problemList").innerHTML = filtered.map(cardHTML).join("");
-}
-
-function cardHTML(p) {
-  const count = p.members.length;
-  const full = count >= 5;
-  const percent = Math.min(count / 5 * 100, 100);
-
-  return `
-    <article class="problem-card">
-      <div class="card-top">
-        <div>
-          <h4>${escapeHTML(p.title)}</h4>
-          <p class="description">${escapeHTML(p.description)}</p>
-          <div class="creator">Added by <b>${escapeHTML(p.creator.name)}</b> · Roll No. ${escapeHTML(p.creator.roll)}</div>
-        </div>
-      </div>
-
-      <div class="team">
-        <div class="team-head">
-          <span>Team members</span>
-          <span class="badge ${full ? "full" : ""}">${count}/5</span>
-        </div>
-        <div class="progress"><span style="width:${percent}%"></span></div>
-        <div class="members">
-          ${p.members.map((m, i) =>
-            `<span class="member">${i + 1}. ${escapeHTML(m.name)} · ${escapeHTML(m.roll)}</span>`
-          ).join("")}
-        </div>
-        <div class="join-row">
-          <button class="join-btn" data-join="${p.id}" ${full ? "disabled" : ""}>
-            ${full ? "Team Full" : "I'm Interested / Join"}
-          </button>
-        </div>
-      </div>
-    </article>
-  `;
-}
-
-function showToast(message) {
-  const toast = $("toast");
-  toast.textContent = message;
-  toast.classList.add("show");
-  clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => toast.classList.remove("show"), 2500);
-}
-
-function openAdd() {
-  $("addSection").classList.remove("hidden");
-  $("problemTitle").focus();
-  window.scrollTo({ top: $("addSection").offsetTop - 20, behavior: "smooth" });
-}
-
-function closeAdd() {
-  $("addSection").classList.add("hidden");
-}
-
-function openJoin(id) {
-  const p = problems.find(x => x.id === id);
-  if (!p || p.members.length >= 5) return;
-
-  activeProblemId = id;
-  $("joinTitle").textContent = `Join: ${p.title}`;
-  $("joinDescription").textContent = `${p.members.length}/5 members currently. Enter your details if you are interested.`;
-  $("joinModal").classList.remove("hidden");
-  $("joinName").focus();
-}
-
-function closeJoin() {
-  activeProblemId = null;
-  $("joinModal").classList.add("hidden");
-  $("joinForm").reset();
-}
-
-$("addBtn").addEventListener("click", openAdd);
-$("emptyAdd").addEventListener("click", openAdd);
-$("closeAdd").addEventListener("click", closeAdd);
-$("browseBtn").addEventListener("click", () => {
-  $("listSection").scrollIntoView({ behavior: "smooth" });
-});
-$("searchInput").addEventListener("input", render);
-
-$("problemForm").addEventListener("submit", e => {
-  e.preventDefault();
-
-  const name = $("creatorName").value.trim();
-  const roll = $("creatorRoll").value.trim();
-
-  const problem = {
-    id: uid(),
-    title: $("problemTitle").value.trim(),
-    description: $("problemDescription").value.trim(),
-    creator: { name, roll },
-    members: [{ name, roll }],
-    createdAt: new Date().toISOString()
-  };
-
-  problems.unshift(problem);
-  saveProblems();
-  render();
-  e.target.reset();
-  closeAdd();
-  showToast("Problem statement added. You are Member 1!");
-  $("listSection").scrollIntoView({ behavior: "smooth" });
-});
-
-$("problemList").addEventListener("click", e => {
-  const button = e.target.closest("[data-join]");
-  if (button) openJoin(button.dataset.join);
-});
-
-$("closeJoin").addEventListener("click", closeJoin);
-
-$("joinModal").addEventListener("click", e => {
-  if (e.target === $("joinModal")) closeJoin();
-});
-
-$("joinForm").addEventListener("submit", e => {
-  e.preventDefault();
-
-  const p = problems.find(x => x.id === activeProblemId);
-  if (!p) return;
-
-  if (p.members.length >= 5) {
-    showToast("This team is already full.");
-    closeJoin();
-    return;
-  }
-
-  const name = $("joinName").value.trim();
-  const roll = $("joinRoll").value.trim();
-  const normalizedRoll = roll.toLowerCase();
-
-  const alreadyJoined = p.members.some(m => m.roll.toLowerCase() === normalizedRoll);
-  if (alreadyJoined) {
-    showToast("This roll number is already in the team.");
-    return;
-  }
-
-  p.members.push({ name, roll });
-  saveProblems();
-  render();
-  closeJoin();
-  showToast("You have joined the team!");
-});
-
-render();
+if(configured())loadProblems();else $("problemList").innerHTML=`<div class="form-note">Add your Supabase credentials to <b>config.js</b> to activate the live board.</div>`;
