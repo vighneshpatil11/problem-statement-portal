@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Problem Statement Team Formation Portal">
+  <title>Problem Statement Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">PS</div>
+      <div>
+        <h1>Problem Statement Portal</h1>
+        <p>Find an idea. Build a team.</p>
+      </div>
+    </div>
+    <div class="connection" id="connectionStatus"><span></span> Demo mode</div>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <div>
+        <span class="eyebrow">TEAM FORMATION</span>
+        <h2>Turn problem statements into teams.</h2>
+        <p>Add your problem statement and you are automatically added as the first member. Or browse existing ideas and join one that interests you.</p>
+      </div>
+      <div class="hero-stats">
+        <div><strong id="problemCount">0</strong><span>Problems</span></div>
+        <div><strong id="teamCount">0</strong><span>Teams</span></div>
+        <div><strong>5</strong><span>Max / team</span></div>
+      </div>
+    </section>
+
+    <section class="actions">
+      <button class="primary" id="addBtn">＋ Add Problem Statement</button>
+      <button class="secondary" id="browseBtn">View Problem Statements</button>
+    </section>
+
+    <section id="addSection" class="panel hidden">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">NEW IDEA</span>
+          <h3>Add a Problem Statement</h3>
+        </div>
+        <button class="icon-btn" id="closeAdd" aria-label="Close">×</button>
+      </div>
+      <form id="problemForm">
+        <label>Problem Statement
+          <input id="problemTitle" maxlength="120" required placeholder="e.g. Smart Waste Management System">
+        </label>
+        <label>Description
+          <textarea id="problemDescription" maxlength="1000" required placeholder="Briefly explain the problem..."></textarea>
+        </label>
+        <div class="form-grid">
+          <label>Name
+            <input id="creatorName" maxlength="80" required placeholder="Your full name">
+          </label>
+          <label>Roll No.
+            <input id="creatorRoll" maxlength="40" required placeholder="Your roll number">
+          </label>
+        </div>
+        <div class="notice">You will automatically become Member 1 of this team.</div>
+        <button class="primary full" type="submit">Add Problem & Create Team</button>
+      </form>
+    </section>
+
+    <section id="listSection" class="panel">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">OPEN PROBLEMS</span>
+          <h3>Problem Statements</h3>
+        </div>
+        <input class="search" id="searchInput" placeholder="Search problems...">
+      </div>
+      <div id="problemList" class="problem-list"></div>
+      <div id="emptyState" class="empty hidden">
+        <div class="empty-icon">⌁</div>
+        <h4>No problem statements yet</h4>
+        <p>Be the first person to add an idea.</p>
+        <button class="secondary" id="emptyAdd">Add Problem Statement</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal hidden" id="joinModal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <button class="icon-btn modal-close" id="closeJoin">×</button>
+      <span class="eyebrow">JOIN TEAM</span>
+      <h3 id="joinTitle">Join this team</h3>
+      <p id="joinDescription" class="muted"></p>
+      <form id="joinForm">
+        <label>Name
+          <input id="joinName" maxlength="80" required placeholder="Your full name">
+        </label>
+        <label>Roll No.
+          <input id="joinRoll" maxlength="40" required placeholder="Your roll number">
+        </label>
+        <button class="primary full" type="submit">Join Team</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <footer>Built for simple college team formation • Data is stored locally in this demo</footer>
+  <script src="script.js"></script>
+</body>
+</html>
